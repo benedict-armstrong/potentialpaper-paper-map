@@ -4,7 +4,8 @@ A [PotentialPaper](https://github.com/PotentialHedge/potentialpaper) plugin: eve
 most like it. acceptodds' paper map, drawn from a **signal set** instead of acceptodds' own database, so any set with
 the same signals can be mapped.
 
-- **A page of its own**, "Paper map" (`/x/benedict-armstrong/paper-map/map`): the whole window under the site's bar (`"layout": "full"`), every paper in the set, in WebGL
+- **A page of its own**, "Paper map" (`/x/benedict-armstrong/paper-map/map`), linked as "map" in the site's navbar
+  (move or hide it in Settings → Navbar): the whole window under the site's bar (`"layout": "full"`), every paper in the set, in WebGL
   (deck.gl). Coloured by region or cluster, with a legend (point at a grouping to light its papers); region names
   when zoomed out and cluster names when zoomed in (or always one, or none). Hover a dot for its title and cluster;
   click to select it, which draws lines to its 10 nearest papers by the set's embedding and lists them; click again,
