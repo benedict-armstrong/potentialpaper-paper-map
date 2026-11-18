@@ -16,7 +16,7 @@ import { MAX_RELAYOUT } from './layout';
 import type { LayoutFrame, LayoutRequest } from './layout.worker';
 import { categoryRgb, labelTerms, searchTitles, topicLabels, type TopicLabel } from './map';
 import { mapTheme } from './theme';
-import { signals as sig } from './signals';
+import { setPath, signals as sig } from './signals';
 
 /**
  * The whole map (the plugin's page, and a venue's, topic's or org's tab): every paper of the set (or of the scope)
@@ -230,6 +230,8 @@ export function showFullMap(o: FullMapOptions): { destroy(): void; setTheme(them
 
   function select(i: number | null, fly = false) {
     selected = i;
+    // The page's address names the selected paper, so a link to it opens on it (a tab's frame has no address).
+    if (!o.embedded) setPath(i === null ? [] : [data.papers[i]]);
     neighbours = null;
     draw();
     renderPanel();

@@ -1,5 +1,5 @@
 import { MapCanvas } from './canvas';
-import { groupName, mapPageUrl, paperUrl, type MapData } from './data';
+import { CLUSTER, groupName, mapPageUrl, paperUrl, XY, type MapData } from './data';
 import { el } from './dom';
 import { categoryRgb, frameAround, topicLabels } from './map';
 import { mapTheme } from './theme';
@@ -10,6 +10,9 @@ import { mapTheme } from './theme';
  * they lie (the view widens to take them in, up to a point). acceptodds' `Minimap` "as on the map", with the nearest
  * papers by embedding in place of its related papers; its redraw from the vectors isn't ported (it needs every
  * paper's vector, which the host can't give cheaply yet).
+ *
+ * It draws from two `nearest` answers alone (`minimapColumns`), each a few KB the site caches per paper, not the
+ * whole map: a reader moving between papers costs the site almost nothing.
  */
 
 /** Papers on the map round the paper, and its nearest by embedding, which get a line. */
@@ -30,6 +33,53 @@ export interface Piece {
   linked: number[];
   /** Titles by position in `points`, where the map has none (`nearest` names the linked ones). */
   titles: Map<number, string>;
+}
+
+type Nearest = Awaited<ReturnType<PP.SDK['signals']['nearest']>>;
+
+/**
+ * The few papers a minimap draws, as columns (`fromColumns` reads them like the whole map's): the paper, its nearest
+ * on the map (`onMap`, by `map.xy`) and its nearest by content (`byContent`), each asked `with` `map.xy` and
+ * `map.cluster`. `null` when the paper isn't on the map.
+ */
+export function minimapColumns(
+  set: string,
+  onMap: Nearest,
+  byContent: Nearest | null,
+  title: string,
+): PP.SignalColumns | null {
+  if (!onMap.paper) return null;
+  const rows = new Map<string, { title: string; values: Record<string, unknown> }>();
+  rows.set(onMap.paper, { title, values: onMap.values ?? {} });
+  for (const n of [...onMap.neighbours, ...(byContent?.neighbours ?? [])])
+    if (!rows.has(n.paper)) rows.set(n.paper, { title: n.title, values: n.values ?? {} });
+  const xy: (number | null)[] = [];
+  const keys: string[] = [];
+  const keyIndex = new Map<string, number>();
+  const cluster: (number | null)[] = [];
+  for (const { values } of rows.values()) {
+    const at = values[XY];
+    const ok = Array.isArray(at) && at.length >= 2 && at.every((v) => typeof v === 'number');
+    xy.push(ok ? at[0] : null, ok ? at[1] : null);
+    const key = values[CLUSTER];
+    if (typeof key !== 'string') {
+      cluster.push(null);
+      continue;
+    }
+    let k = keyIndex.get(key);
+    if (k === undefined) keyIndex.set(key, (k = keys.push(key) - 1));
+    cluster.push(k);
+  }
+  const names = onMap.labels?.[CLUSTER] ?? {};
+  return {
+    set: { id: set, name: set, generation: 0 },
+    papers: [...rows.keys()],
+    titles: [...rows.values()].map((r) => r.title),
+    signals: {
+      [XY]: { kind: 'vector', dims: 2, values: xy },
+      [CLUSTER]: { kind: 'label', keys, titles: keys.map((key) => names[key] ?? null), values: cluster },
+    },
+  };
 }
 
 /** The `k` papers nearest point `at` on the map, nearest first, without it. */

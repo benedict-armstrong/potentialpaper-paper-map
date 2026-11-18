@@ -9,11 +9,11 @@
  */
 import './style.css';
 import { defaultStore } from './cache';
-import { EMBEDDING, fromColumns, paperFromPath, setOf, XY } from './data';
+import { CLUSTER, EMBEDDING, fromColumns, paperFromPath, setOf, XY } from './data';
 import { el, note } from './dom';
 import { showFullMap } from './fullmap';
 import { failureText, loadColumns, type ColumnsStore } from './load';
-import { MINIMAP_LINES, pieceOf, showMinimap } from './minimap';
+import { MINIMAP_LINES, MINIMAP_NEAREST, minimapColumns, pieceOf, showMinimap } from './minimap';
 import { signals as sig } from './signals';
 
 const app = document.getElementById('app')!;
@@ -70,19 +70,23 @@ async function start(ctx: PP.Context) {
     }
     if (!ctx.page) return message('Nothing to map here.');
     if (surface.panel === 'minimap') {
-      // The paper's nearest first: it says whether the paper is on the map at all, before the map is fetched.
-      const near = await sig.nearest(set, EMBEDDING, undefined, { k: MINIMAP_LINES });
+      // Two small answers the site caches per paper, not the whole map: the papers round this one on the map, and
+      // its nearest by content, each with what the minimap draws of them.
+      const info = await sig.set(set);
+      const names = new Set(info.signals.map((s) => s.name));
+      if (!names.has(XY)) return message(`The signal set ${set} has no "${XY}" signal, so it can't be drawn.`);
+      const drawn = [XY, CLUSTER].filter((s) => names.has(s));
+      const [onMap, byContent] = await Promise.all([
+        sig.nearest(set, XY, undefined, { k: MINIMAP_NEAREST, with: drawn }),
+        names.has(EMBEDDING) ? sig.nearest(set, EMBEDDING, undefined, { k: MINIMAP_LINES, with: drawn }) : null,
+      ]);
       if (token !== run) return;
-      if (!near.paper) return message('This paper isn’t on the map.');
-      app.replaceChildren(el('p', { className: 'note' }, 'Loading the map…'));
-      // With titles, so hovering names any paper: the same copy as the map page's, so either fills the cache.
-      const { columns } = await loadColumns(store, set, { titles: true });
-      if (token !== run) return;
-      const data = fromColumns(columns);
-      const piece = pieceOf(data, near.paper, near.neighbours);
-      if (!piece) return message('This paper isn’t on the map.');
+      const columns = minimapColumns(set, onMap, byContent, ctx.page.name);
+      const data = columns && fromColumns(columns);
+      const piece = data && onMap.paper ? pieceOf(data, onMap.paper, byContent?.neighbours ?? []) : null;
+      if (!data || !piece || !onMap.paper) return message('This paper isn’t on the map.');
       app.className = '';
-      view = showMinimap({ root: app, data, piece, site: ctx.site, pluginId: ctx.plugin.id, paper: near.paper });
+      view = showMinimap({ root: app, data, piece, site: ctx.site, pluginId: ctx.plugin.id, paper: onMap.paper });
       pp.ui.autoHeight(true);
       return;
     }

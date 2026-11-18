@@ -336,8 +336,17 @@ declare namespace PP {
         set: string,
         signal: string,
         paper?: string,
-        options?: { k?: number },
-      ): Promise<{ set: string; signal: string; paper: string | null; neighbours: { paper: string; title: string; score: number }[] }>;
+        options?: { k?: number; with?: string[] },
+      ): Promise<{
+        set: string;
+        signal: string;
+        paper: string | null;
+        /** With `with`: the paper's values of those signals (a label's key), `null` where it has none. */
+        values?: Record<string, unknown>;
+        neighbours: { paper: string; title: string; score: number; values?: Record<string, unknown> }[];
+        /** With `with`: the titles of the label values among them, by signal and key. */
+        labels?: Record<string, Record<string, string>>;
+      }>;
       /** A paper's values (the current one by default), by set. */
       forPaper(
         paper?: string,
@@ -363,6 +372,11 @@ declare namespace PP {
       autoHeight(on?: boolean): void;
       /** Open an http(s) address in a new tab. */
       openUrl(url: string): Promise<void>;
+      /**
+       * On your own page, set the rest of its address after the page's id (`surface.path`) without a reload, so the
+       * reader can share what they are looking at. Fails in a panel.
+       */
+      setPath(path: string[]): Promise<void>;
     };
     theme: { onChange(listener: (theme: Theme) => void): () => void };
     /** Handle a command your manifest declares; the reader runs it from your panel's menu. */

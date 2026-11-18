@@ -53,6 +53,36 @@ const page = (kind: PP.PageKind, identifier: string, name = identifier): PP.Page
 
 type Surface = PP.Context['surface'];
 
+/** The host's `nearest`, over the fixture's papers: by `map.xy` (a then d's neighbours) or by `embedding`. */
+function nearest(params: Record<string, unknown>) {
+  const values: Record<string, Record<string, unknown>> = {
+    'openreview:a': { 'map.xy': [0, 0], 'map.cluster': '12' },
+    'openreview:b': { 'map.xy': [1, 0], 'map.cluster': '40' },
+    'openreview:c': { 'map.xy': [10, 5], 'map.cluster': null },
+    'openreview:e': { 'map.xy': [0.5, 0.5], 'map.cluster': '12' },
+  };
+  const withValues = Array.isArray(params.with) && params.with.length > 0;
+  const of = (paper: string) => (withValues ? { values: values[paper] } : {});
+  const list =
+    params.signal === 'map.xy'
+      ? [
+          { paper: 'openreview:e', title: 'Agents that act', score: -0.5 },
+          { paper: 'openreview:b', title: 'Agents that remember', score: -1 },
+        ]
+      : [
+          { paper: 'openreview:b', title: 'Agents that remember', score: 0.9 },
+          { paper: 'openreview:c', title: 'Kv cache compression', score: 0.5 },
+        ];
+  return {
+    set: SET.id,
+    signal: params.signal,
+    paper: 'openreview:a',
+    ...of('openreview:a'),
+    neighbours: list.map((n) => ({ ...n, ...of(n.paper) })),
+    ...(withValues ? { labels: { 'map.cluster': { '12': 'planning', '40': 'memory' } } } : {}),
+  };
+}
+
 function install(surface: Surface, current: PP.PageSummary | null, answers: Partial<Record<string, unknown>> = {}) {
   const calls: { method: string; params: Record<string, unknown> }[] = [];
   const answer = async (method: string, params: Record<string, unknown>, fallback: unknown) => {
@@ -83,15 +113,7 @@ function install(surface: Surface, current: PP.PageSummary | null, answers: Part
         {
           'signals.set': SET,
           'signals.columns': columns(),
-          'signals.nearest': {
-            set: SET.id,
-            signal: 'embedding',
-            paper: 'openreview:a',
-            neighbours: [
-              { paper: 'openreview:b', title: 'Agents that remember', score: 0.9 },
-              { paper: 'openreview:c', title: 'Kv cache compression', score: 0.5 },
-            ],
-          },
+          'signals.nearest': nearest(params),
         }[method],
       ),
     ui: {
@@ -146,6 +168,8 @@ describe('the map page', () => {
     await vi.waitFor(() => expect(app().querySelector('.selected ol')?.textContent).toContain('Kv cache compression'));
     expect(calls.find((c) => c.method === 'signals.nearest')!.params).toEqual({ set: SET.id, signal: 'embedding', paper: 'openreview:b', k: 10 });
     expect(drawn.update.at(-1)).toMatchObject({ selected: 1, neighbours: [2] });
+    // The address names the selected paper.
+    expect(calls.filter((c) => c.method === 'ui.setPath').at(-1)!.params).toEqual({ path: ['openreview:b'] });
   });
 
   it('lights the titles a search finds and the labels it names', async () => {
@@ -186,21 +210,26 @@ describe('a venue’s tab', () => {
 });
 
 describe('a paper’s minimap', () => {
-  it('draws the paper among the papers round it, with lines to its nearest by content', async () => {
+  it('draws the paper among the papers round it, with lines to its nearest by content, from two small reads', async () => {
     const { pp, calls } = await boot({ type: 'panel', panel: 'minimap', slot: 'paper.aside' }, page('paper', 'arxiv:1'));
     await vi.waitFor(() => expect(app().querySelector('.minimap')).not.toBeNull());
-    expect(calls.find((c) => c.method === 'signals.nearest')!.params).toEqual({ set: SET.id, signal: 'embedding', paper: 'arxiv:1', k: 10 });
-    expect(calls.find((c) => c.method === 'signals.columns')!.params).toMatchObject({ titles: true });
-    expect(drawn.update.at(-1)).toMatchObject({ selected: 0, neighbours: [1, 2], labelMode: 'cluster' });
+    const near = calls.filter((c) => c.method === 'signals.nearest').map((c) => c.params);
+    expect(near).toEqual([
+      { set: SET.id, signal: 'map.xy', paper: 'arxiv:1', k: 100, with: ['map.xy', 'map.cluster'] },
+      { set: SET.id, signal: 'embedding', paper: 'arxiv:1', k: 10, with: ['map.xy', 'map.cluster'] },
+    ]);
+    // Not the whole map.
+    expect(calls.some((c) => c.method === 'signals.columns')).toBe(false);
+    // a, then e and b round it on the map, then c (nearest by content only); lines to b and c.
+    expect(drawn.update.at(-1)).toMatchObject({ selected: 0, neighbours: [2, 3], labelMode: 'cluster' });
     app().querySelector<HTMLButtonElement>('.footer button')!.click();
     expect(pp.ui.openUrl).toHaveBeenCalledWith('https://site.org/x/benedict-armstrong/paper-map/map/openreview%3Aa');
   });
 
-  it('says the paper isn’t on the map, without fetching it', async () => {
-    const { calls } = await boot({ type: 'panel', panel: 'minimap', slot: 'paper.aside' }, page('paper', 'arxiv:2'), {
-      'signals.nearest': { set: SET.id, signal: 'embedding', paper: null, neighbours: [] },
+  it('says the paper isn’t on the map', async () => {
+    await boot({ type: 'panel', panel: 'minimap', slot: 'paper.aside' }, page('paper', 'arxiv:2'), {
+      'signals.nearest': { set: SET.id, signal: 'map.xy', paper: null, neighbours: [] },
     });
     await vi.waitFor(() => expect(app().textContent).toBe('This paper isn’t on the map.'));
-    expect(calls.some((c) => c.method === 'signals.columns')).toBe(false);
   });
 });
