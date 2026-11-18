@@ -19,10 +19,8 @@ import { signals as sig } from './signals';
 const app = document.getElementById('app')!;
 const store: ColumnsStore = defaultStore<PP.SignalColumns>();
 
-/** The page map's height: most of the reader's screen, as the frame can't see the window it sits in. */
-function pageHeight(): number {
-  return Math.round(Math.min(1100, Math.max(480, (screen.availHeight || 900) - 220)));
-}
+/** The page map fills its frame, which the site makes the whole window under its bar (`"layout": "full"`). */
+const FULL = '100vh';
 /** A tab's: a bit less, so the page around it still shows. */
 function tabHeight(): number {
   return Math.round(Math.min(800, Math.max(420, (screen.availHeight || 900) * 0.65)));
@@ -38,11 +36,11 @@ function message(text: string) {
 }
 
 /** A box of the map's height saying it is loading, so nothing jumps when the map arrives. */
-function loading(height: number) {
+function loading(height: number | typeof FULL) {
   app.className = 'map';
-  app.style.height = `${height}px`;
+  app.style.height = height === FULL ? FULL : `${height}px`;
   app.replaceChildren(el('p', { className: 'loading' }, 'Loading the map…'));
-  void pp.ui.setHeight(height);
+  if (height !== FULL) void pp.ui.setHeight(height);
 }
 
 async function start(ctx: PP.Context) {
@@ -54,12 +52,11 @@ async function start(ctx: PP.Context) {
   const surface = ctx.surface;
   try {
     if (surface.type === 'page') {
-      const height = pageHeight();
-      loading(height);
+      loading(FULL);
       const { set: info, columns } = await loadColumns(store, set, { titles: true });
       if (token !== run) return;
       if (!hasPapers(columns)) return message(`The signal set ${set} has no papers on its map yet.`);
-      app.style.height = `${height}px`;
+      app.style.height = FULL;
       view = showFullMap({
         root: app,
         set,

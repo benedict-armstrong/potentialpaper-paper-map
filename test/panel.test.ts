@@ -138,7 +138,9 @@ describe('the map page', () => {
       'llm agents · skills 2',
       '3 1',
     ]);
-    expect(pp.ui.setHeight).toHaveBeenCalled();
+    // A full-window page: it fills its frame and asks for no height.
+    expect(pp.ui.setHeight).not.toHaveBeenCalled();
+    expect(document.getElementById('app')!.style.height).toBe('100vh');
     // Opened on paper b: selected, flown to, and its nearest papers listed.
     expect(drawn.focus).toEqual([1]);
     await vi.waitFor(() => expect(app().querySelector('.selected ol')?.textContent).toContain('Kv cache compression'));
