@@ -4,6 +4,7 @@
  */
 import { cached, type Store } from './cache';
 import { CLUSTER, REGION, XY } from './data';
+import { signals as sig } from './signals';
 
 export const MAP_SIGNALS = [XY, REGION, CLUSTER];
 
@@ -25,12 +26,12 @@ export async function loadColumns(
   set: string,
   options: { scope?: string | null; titles: boolean },
 ): Promise<{ set: PP.SignalSet; columns: PP.SignalColumns }> {
-  const info = await pp.signals.set(set);
+  const info = await sig.set(set);
   const missing = MAP_SIGNALS.filter((s) => !info.signals.some((g) => g.name === s));
   if (missing.includes(XY)) throw new NoMap(`The signal set ${set} has no "${XY}" signal, so it can't be drawn.`);
   const signals = MAP_SIGNALS.filter((s) => !missing.includes(s));
   const columns = await cached(store, keysFor(set, options.scope ?? null, options.titles), stampOf(info), () =>
-    pp.signals.columns(set, { signals, titles: options.titles, ...(options.scope ? { scope: options.scope } : {}) }),
+    sig.columns(set, { signals, titles: options.titles, ...(options.scope ? { scope: options.scope } : {}) }),
   );
   return { set: info, columns };
 }

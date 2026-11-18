@@ -54,9 +54,9 @@ const page = (kind: PP.PageKind, identifier: string, name = identifier): PP.Page
 type Surface = PP.Context['surface'];
 
 function install(surface: Surface, current: PP.PageSummary | null, answers: Partial<Record<string, unknown>> = {}) {
-  const calls: { method: string; args: unknown[] }[] = [];
-  const answer = async (method: string, args: unknown[], fallback: unknown) => {
-    calls.push({ method, args });
+  const calls: { method: string; params: Record<string, unknown> }[] = [];
+  const answer = async (method: string, params: Record<string, unknown>, fallback: unknown) => {
+    calls.push({ method, params });
     const a = answers[method];
     if (a instanceof Error) throw a;
     return a ?? fallback;
@@ -75,20 +75,25 @@ function install(surface: Surface, current: PP.PageSummary | null, answers: Part
   const pp = {
     context,
     ready: Promise.resolve(context),
-    signals: {
-      set: (...args: unknown[]) => answer('signals.set', args, SET),
-      columns: (...args: unknown[]) => answer('signals.columns', args, columns()),
-      nearest: (...args: unknown[]) =>
-        answer('signals.nearest', args, {
-          set: SET.id,
-          signal: 'embedding',
-          paper: 'openreview:a',
-          neighbours: [
-            { paper: 'openreview:b', title: 'Agents that remember', score: 0.9 },
-            { paper: 'openreview:c', title: 'Kv cache compression', score: 0.5 },
-          ],
-        }),
-    },
+    // No `pp.signals`, as in an SDK a browser cached from before it: the plugin calls the methods by name.
+    call: (method: string, params: Record<string, unknown>) =>
+      answer(
+        method,
+        params,
+        {
+          'signals.set': SET,
+          'signals.columns': columns(),
+          'signals.nearest': {
+            set: SET.id,
+            signal: 'embedding',
+            paper: 'openreview:a',
+            neighbours: [
+              { paper: 'openreview:b', title: 'Agents that remember', score: 0.9 },
+              { paper: 'openreview:c', title: 'Kv cache compression', score: 0.5 },
+            ],
+          },
+        }[method],
+      ),
     ui: {
       setHeight: vi.fn(async () => {}),
       autoHeight: vi.fn(),
@@ -126,7 +131,7 @@ describe('the map page', () => {
     const { pp, calls } = await boot({ type: 'page', page: 'map', path: ['openreview%3Ab'] }, null);
     await vi.waitFor(() => expect(app().querySelector('.controls')).not.toBeNull());
     const asked = calls.find((c) => c.method === 'signals.columns')!;
-    expect(asked.args).toEqual([SET.id, { signals: ['map.xy', 'map.region', 'map.cluster'], titles: true }]);
+    expect(asked.params).toEqual({ set: SET.id, signals: ['map.xy', 'map.region', 'map.cluster'], titles: true });
     expect(app().textContent).toContain('3 papers, near the papers most like them');
     // The legend lists the regions, largest first.
     expect([...app().querySelectorAll('.legend li')].map((li) => li.textContent)).toEqual([
@@ -137,7 +142,7 @@ describe('the map page', () => {
     // Opened on paper b: selected, flown to, and its nearest papers listed.
     expect(drawn.focus).toEqual([1]);
     await vi.waitFor(() => expect(app().querySelector('.selected ol')?.textContent).toContain('Kv cache compression'));
-    expect(calls.find((c) => c.method === 'signals.nearest')!.args).toEqual([SET.id, 'embedding', 'openreview:b', { k: 10 }]);
+    expect(calls.find((c) => c.method === 'signals.nearest')!.params).toEqual({ set: SET.id, signal: 'embedding', paper: 'openreview:b', k: 10 });
     expect(drawn.update.at(-1)).toMatchObject({ selected: 1, neighbours: [2] });
   });
 
@@ -164,7 +169,7 @@ describe('a venue’s tab', () => {
   it('maps the venue’s papers', async () => {
     const { calls } = await boot({ type: 'panel', panel: 'map', slot: 'venue.tabs' }, page('venue', 'venue:iclr/2027', 'ICLR 2027'));
     await vi.waitFor(() => expect(app().querySelector('.controls')).not.toBeNull());
-    expect(calls.find((c) => c.method === 'signals.columns')!.args[1]).toMatchObject({ scope: 'venue:iclr/2027', titles: true });
+    expect(calls.find((c) => c.method === 'signals.columns')!.params).toMatchObject({ scope: 'venue:iclr/2027', titles: true });
     expect(app().textContent).toContain('3 papers of ICLR 2027');
   });
 
@@ -182,8 +187,8 @@ describe('a paper’s minimap', () => {
   it('draws the paper among the papers round it, with lines to its nearest by content', async () => {
     const { pp, calls } = await boot({ type: 'panel', panel: 'minimap', slot: 'paper.aside' }, page('paper', 'arxiv:1'));
     await vi.waitFor(() => expect(app().querySelector('.minimap')).not.toBeNull());
-    expect(calls.find((c) => c.method === 'signals.nearest')!.args).toEqual([SET.id, 'embedding', undefined, { k: 10 }]);
-    expect(calls.find((c) => c.method === 'signals.columns')!.args[1]).toMatchObject({ titles: true });
+    expect(calls.find((c) => c.method === 'signals.nearest')!.params).toEqual({ set: SET.id, signal: 'embedding', paper: 'arxiv:1', k: 10 });
+    expect(calls.find((c) => c.method === 'signals.columns')!.params).toMatchObject({ titles: true });
     expect(drawn.update.at(-1)).toMatchObject({ selected: 0, neighbours: [1, 2], labelMode: 'cluster' });
     app().querySelector<HTMLButtonElement>('.footer button')!.click();
     expect(pp.ui.openUrl).toHaveBeenCalledWith('https://site.org/x/benedict-armstrong/paper-map/map/openreview%3Aa');

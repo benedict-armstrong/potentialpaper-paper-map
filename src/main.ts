@@ -14,6 +14,7 @@ import { el, note } from './dom';
 import { showFullMap } from './fullmap';
 import { failureText, loadColumns, type ColumnsStore } from './load';
 import { MINIMAP_LINES, pieceOf, showMinimap } from './minimap';
+import { signals as sig } from './signals';
 
 const app = document.getElementById('app')!;
 const store: ColumnsStore = defaultStore<PP.SignalColumns>();
@@ -73,7 +74,7 @@ async function start(ctx: PP.Context) {
     if (!ctx.page) return message('Nothing to map here.');
     if (surface.panel === 'minimap') {
       // The paper's nearest first: it says whether the paper is on the map at all, before the map is fetched.
-      const near = await pp.signals.nearest(set, EMBEDDING, undefined, { k: MINIMAP_LINES });
+      const near = await sig.nearest(set, EMBEDDING, undefined, { k: MINIMAP_LINES });
       if (token !== run) return;
       if (!near.paper) return message('This paper isn’t on the map.');
       app.replaceChildren(el('p', { className: 'note' }, 'Loading the map…'));

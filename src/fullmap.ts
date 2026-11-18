@@ -16,6 +16,7 @@ import { MAX_RELAYOUT } from './layout';
 import type { LayoutFrame, LayoutRequest } from './layout.worker';
 import { categoryRgb, labelTerms, searchTitles, topicLabels, type TopicLabel } from './map';
 import { mapTheme } from './theme';
+import { signals as sig } from './signals';
 
 /**
  * The whole map (the plugin's page, and a venue's, topic's or org's tab): every paper of the set (or of the scope)
@@ -238,7 +239,7 @@ export function showFullMap(o: FullMapOptions): { destroy(): void; setTheme(them
     const paper = data.papers[i];
     let found = nearestCache.get(paper);
     if (!found) {
-      found = pp.signals.nearest(o.set, EMBEDDING, paper, { k: NEAREST }).then((r) => r.neighbours);
+      found = sig.nearest(o.set, EMBEDDING, paper, { k: NEAREST }).then((r) => r.neighbours);
       nearestCache.set(paper, found);
       found.catch(() => nearestCache.delete(paper));
     }
