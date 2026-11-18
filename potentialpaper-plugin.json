@@ -1,0 +1,46 @@
+{
+  "id": "benedict-armstrong/paper-map",
+  "name": "Paper map",
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "description": "Every paper on a map, near the papers most like it: acceptodds' paper map, drawn from a signal set. A whole page, a tab on venues, topics and organisations, and each paper's minimap.",
+  "author": "Benedict Armstrong",
+  "homepage": "https://github.com/benedict-armstrong/potentialpaper-paper-map",
+  "main": "dist/index.html",
+  "permissions": [],
+  "contributes": {
+    "pages": [{ "id": "map", "title": "Paper map" }],
+    "panels": [
+      {
+        "id": "map",
+        "title": "Map",
+        "kinds": ["venue"],
+        "slot": "tab",
+        "when": "page.hasSubmissions"
+      },
+      {
+        "id": "scope-map",
+        "title": "Map",
+        "kinds": ["topic", "org"],
+        "slot": "tab"
+      },
+      {
+        "id": "minimap",
+        "title": "On the map",
+        "kinds": ["paper"],
+        "slot": "aside",
+        "when": "page.hasSubmissions"
+      }
+    ],
+    "settings": {
+      "set": {
+        "type": "string",
+        "title": "Signal set",
+        "default": "benedict-armstrong/acceptodds-map",
+        "maxLength": 104,
+        "placeholder": "owner/name",
+        "description": "The signal set the map is drawn from, by its id. Any set with the signals map.xy (a 2D vector), map.region and map.cluster (labels) and embedding (a vector, for nearest papers) works."
+      }
+    }
+  }
+}

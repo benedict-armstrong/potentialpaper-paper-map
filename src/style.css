@@ -1,0 +1,257 @@
+/* The page's tokens arrive as --pp-<name> on :root (pp.d.ts, Theme), so the map follows the site in light and dark. */
+:root {
+  --ink: var(--pp-ink, #1d1d1d);
+  --bg: var(--pp-bg, #fbfaf7);
+  --muted: var(--pp-muted, #777);
+  --faint: var(--pp-faint, #888);
+  --rule: var(--pp-rule, #ddd);
+  --rule-soft: var(--pp-rule-soft, #eee);
+  --card: var(--pp-card, #fff);
+  --accent: var(--pp-accent, #b31b1b);
+  --serif: var(--pp-font-serif, Georgia, 'Times New Roman', serif);
+}
+body {
+  /* Keeps the last element's bottom margin inside the body, which the frame is sized to (no scroll bar). */
+  display: flow-root;
+  margin: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 13px/1.45 var(--pp-font-sans, system-ui, sans-serif);
+}
+p {
+  margin: 0 0 6px;
+}
+.note,
+.loading {
+  color: var(--muted);
+  font-style: italic;
+}
+button.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+button.link:hover {
+  text-decoration-color: currentColor;
+}
+.on {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The map: the canvas fills it, the rest floats over it. */
+.map {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  box-sizing: border-box;
+}
+.map .loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+}
+.canvas {
+  position: absolute;
+  inset: 0;
+}
+.float {
+  position: absolute;
+  z-index: 10;
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--card) 95%, transparent);
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.reset {
+  top: 8px;
+  right: 8px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.reset:hover {
+  border-color: var(--ink);
+}
+.notice {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.tooltip {
+  position: absolute;
+  z-index: 20;
+  max-width: min(380px, 80%);
+  padding: 4px 8px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 12px;
+  pointer-events: none;
+}
+.tooltip span,
+.tooltip i {
+  display: block;
+}
+.tooltip .sub {
+  opacity: 0.7;
+}
+.tooltip .hint {
+  margin-top: 2px;
+  opacity: 0.5;
+}
+
+/* The controls, top left; along the foot in a narrow frame. They fold away. */
+.controls {
+  position: absolute;
+  z-index: 10;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  max-height: calc(100% - 24px);
+  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--card) 95%, transparent);
+}
+@media (max-width: 600px) {
+  .controls {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    max-height: 45%;
+  }
+}
+.controls .head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--muted);
+}
+.controls .body {
+  overflow-y: auto;
+  padding: 8px 12px;
+  color: var(--muted);
+}
+.toggle {
+  margin-bottom: 2px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px 10px;
+  max-height: 128px;
+  overflow-y: auto;
+  margin: 4px 0 10px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.legend button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.legend button.on {
+  color: var(--ink);
+  text-decoration: underline;
+}
+.swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+}
+.count {
+  color: var(--faint);
+}
+.search {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--rule);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+  font-size: 12px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.hits,
+.selected ol {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.selected ol {
+  padding-left: 20px;
+  list-style: decimal;
+}
+.hits li,
+.selected li {
+  margin-bottom: 3px;
+}
+button.title {
+  color: var(--ink);
+}
+.selected {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule-soft);
+}
+.paper-title {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.3;
+}
+.selected .sub {
+  margin-top: 4px;
+  font-size: 12px;
+}
+.subhead {
+  margin: 8px 0 2px;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* The minimap, in a paper's aside. */
+.minimap {
+  height: 300px;
+}
+.footer {
+  right: 6px;
+  bottom: 6px;
+}
+.caption {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
