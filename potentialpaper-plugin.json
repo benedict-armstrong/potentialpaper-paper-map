@@ -1,7 +1,7 @@
 {
   "id": "benedict-armstrong/paper-map",
   "name": "Paper map",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "apiVersion": 1,
   "description": "Every paper on a map, near the papers most like it: acceptodds' paper map, drawn from a signal set. A whole page, a tab on venues, topics and organisations, and each paper's minimap.",
   "author": "Benedict Armstrong",
@@ -37,6 +37,7 @@
         "title": "On the map",
         "kinds": ["paper"],
         "slot": "community",
+        "movable": true,
         "when": "page.hasSignals"
       }
     ],

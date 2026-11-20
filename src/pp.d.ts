@@ -37,6 +37,11 @@ declare namespace PP {
     tokens: Record<string, string>;
   }
 
+  interface Size {
+    width: number;
+    height: number;
+  }
+
   interface Context {
     plugin: { id: string; name: string; version: string; sha: string | null; dev: boolean };
     /** The panel this frame draws, or the plugin page it is. */
@@ -44,11 +49,18 @@ declare namespace PP {
     | {
         type: 'panel';
         panel: string;
+        /** The slot's full name: `paper.community`. */
         slot: string;
+        /** Where it sits: `main`, `aside`, `tab`, `body`, `submission`, `community` or `author`. */
+        place: string;
+        /** Its size in CSS pixels, kept current (`ui.onResize`). */
+        size: Size;
         /** In the `paper.submission` slot: the submission it is drawn under, by its venue (`openreview:ICLR.cc/2027/Conference`). */
         submission?: { venue: { id: string; name: string } };
+        /** In the `paper.author` slot: what the paper's authors set for it in `author/plugins.json`. */
+        config?: Record<string, unknown>;
       }
-    | { type: 'page'; page: string; path: string[] };
+    | { type: 'page'; page: string; path: string[]; size: Size };
     /** The page the panel is on; `null` on the plugin's own page. */
     page: PageSummary | null;
     /** The pages above it: a paper's venues, topics and orgs; a topic's broader topics; an org's parents. */
@@ -261,7 +273,7 @@ declare namespace PP {
     supports(method: string): boolean;
     /** Any method by name, for one newer than these types. */
     call<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
-    /** `settings.change`, `theme.change`, `context.change`. Returns a function that stops listening. */
+    /** `settings.change`, `theme.change`, `context.change`, `surface.resize`. Returns a function that stops listening. */
     on(event: string, listener: (params: unknown) => void): () => void;
     getContext(): Promise<Context>;
     settings: {
@@ -377,6 +389,8 @@ declare namespace PP {
        * reader can share what they are looking at. Fails in a panel.
        */
       setPath(path: string[]): Promise<void>;
+      /** When the frame's size changes (the column, the window, or its own height); `context.surface.size` is kept current. */
+      onResize(listener: (size: Size) => void): () => void;
     };
     theme: { onChange(listener: (theme: Theme) => void): () => void };
     /** Handle a command your manifest declares; the reader runs it from your panel's menu. */

@@ -13,7 +13,7 @@ import { CLUSTER, EMBEDDING, fromColumns, paperFromPath, setOf, XY } from './dat
 import { el, note } from './dom';
 import { showFullMap } from './fullmap';
 import { failureText, loadColumns, type ColumnsStore } from './load';
-import { MINIMAP_LINES, MINIMAP_NEAREST, minimapColumns, pieceOf, showMinimap } from './minimap';
+import { MINIMAP_LINES, MINIMAP_NEAREST, minimapColumns, minimapHeight, pieceOf, showMinimap } from './minimap';
 import { signals as sig } from './signals';
 
 const app = document.getElementById('app')!;
@@ -26,13 +26,19 @@ function tabHeight(): number {
   return Math.round(Math.min(800, Math.max(420, (screen.availHeight || 900) * 0.65)));
 }
 
-let view: { destroy(): void; setTheme(theme: PP.Theme): void } | null = null;
+let view: { destroy(): void; setTheme(theme: PP.Theme): void; setHeight?(height: number): void } | null = null;
 let run = 0;
 let currentSet = '';
 
 function message(text: string) {
   note(app, text);
   pp.ui.autoHeight(true);
+}
+
+/** The minimap's height where it sits; a host that doesn't say where or how wide gets the side column's. */
+function minimapSize(surface: PP.Context['surface']): number {
+  if (surface.type !== 'panel') return minimapHeight('aside', 0);
+  return minimapHeight(surface.place ?? 'aside', surface.size?.width ?? window.innerWidth);
 }
 
 /** A box of the map's height saying it is loading, so nothing jumps when the map arrives. */
@@ -86,7 +92,15 @@ async function start(ctx: PP.Context) {
       const piece = data && onMap.paper ? pieceOf(data, onMap.paper, byContent?.neighbours ?? []) : null;
       if (!data || !piece || !onMap.paper) return message('This paper isn’t on the map.');
       app.className = '';
-      view = showMinimap({ root: app, data, piece, site: ctx.site, pluginId: ctx.plugin.id, paper: onMap.paper });
+      view = showMinimap({
+        root: app,
+        data,
+        piece,
+        site: ctx.site,
+        pluginId: ctx.plugin.id,
+        paper: onMap.paper,
+        height: minimapSize(surface),
+      });
       pp.ui.autoHeight(true);
       return;
     }
@@ -120,6 +134,12 @@ function hasPapers(columns: PP.SignalColumns): boolean {
 
 pp.ready.then(start);
 pp.theme.onChange((theme) => view?.setTheme(theme));
+// The minimap's height follows its frame's width: the column, or the window, changing.
+// An SDK from before `onResize` (cached by the browser) has none: the minimap then keeps its first height.
+pp.ui.onResize?.(() => {
+  const surface = pp.context?.surface;
+  if (surface?.type === 'panel' && surface.panel === 'minimap') view?.setHeight?.(minimapSize(surface));
+});
 pp.settings.onChange((settings) => {
   if (setOf(settings) !== currentSet && pp.context) void start({ ...pp.context, settings });
 });

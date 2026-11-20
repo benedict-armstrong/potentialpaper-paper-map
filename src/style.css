@@ -242,7 +242,7 @@ button.title {
   font-weight: 600;
 }
 
-/* The minimap, in a paper's Community section. */
+/* The minimap: its height is set from where it sits and its width (minimapHeight). */
 .minimap {
   height: 300px;
 }

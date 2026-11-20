@@ -5,7 +5,7 @@ import { categoryRgb, frameAround, topicLabels } from './map';
 import { mapTheme } from './theme';
 
 /**
- * A paper's piece of the map, for the Community section of its page: the paper among the papers nearest it on the map (`map.xy`),
+ * A paper's piece of the map, at the end of its page's Community section by default (a reader may move it): the paper among the papers nearest it on the map (`map.xy`),
  * framed round it, coloured and named by cluster, with lines to its nearest papers by the set's `embedding` wherever
  * they lie (the view widens to take them in, up to a point). acceptodds' `Minimap` "as on the map", with the nearest
  * papers by embedding in place of its related papers; its redraw from the vectors isn't ported (it needs every
@@ -14,6 +14,15 @@ import { mapTheme } from './theme';
  * It draws from two `nearest` answers alone (`minimapColumns`), each a few KB the site caches per paper, not the
  * whole map: a reader moving between papers costs the site almost nothing.
  */
+
+/**
+ * How tall the minimap is, by where it sits and how wide its frame is (`surface.place`, `surface.size`): 300px in the
+ * side column or anywhere narrow, and in the main text half its width, up to 440px, so it reads as a figure there.
+ */
+export function minimapHeight(place: string, width: number): number {
+  if (place === 'aside' || width < 600) return 300;
+  return Math.min(440, Math.round(width / 2));
+}
 
 /** Papers on the map round the paper, and its nearest by embedding, which get a line. */
 export const MINIMAP_NEAREST = 100;
@@ -132,10 +141,13 @@ export function showMinimap(o: {
   pluginId: string;
   /** The set's identifier of the paper, for the full map's address. */
   paper: string;
-}): { destroy(): void; setTheme(theme: PP.Theme): void } {
+  /** Its height in px (`minimapHeight`). */
+  height: number;
+}): { destroy(): void; setTheme(theme: PP.Theme): void; setHeight(height: number): void } {
   const { data, piece } = o;
   const { points } = piece;
   const box = el('div', { className: 'map minimap' });
+  box.style.height = `${o.height}px`;
   const tooltip = el('div', { className: 'tooltip', hidden: true });
   const footer = el('div', { className: 'float footer' });
   const full = el('button', { type: 'button', className: 'link' }, 'Open the full map');
@@ -206,6 +218,9 @@ export function showMinimap(o: {
   draw();
   return {
     destroy: () => canvas.destroy(),
+    setHeight(height) {
+      box.style.height = `${height}px`;
+    },
     setTheme(next) {
       theme = mapTheme(next);
       draw();

@@ -15,7 +15,7 @@ the same signals can be mapped.
   `/map/<paper>` (`/map/openreview%3Aabc`) opens on that paper, selected.
 - **A tab on a venue, topic or organisation**: the same map, of that page's papers only ("No papers on this map
   here." when it has none). On a venue it shows only when the venue has submissions.
-- **On a paper** (at the end of the Community section, in the main text): its minimap, as acceptodds draws it "as on the map". The paper among the 100 papers
+- **On a paper** (at the end of the Community section by default; readers can move it in Settings → Paper pages): its minimap, as acceptodds draws it "as on the map". The paper among the 100 papers
   nearest it on the map, framed round it and coloured by cluster, with lines to its 10 nearest papers by embedding
   (the view widens to take them in). Hover names a paper, a click opens it, and "Open the full map" opens the page
   on it. On a paper with no submissions it doesn't show; on one the set doesn't cover it says "This paper isn't on

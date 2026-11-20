@@ -85,6 +85,7 @@ function nearest(params: Record<string, unknown>) {
 
 function install(surface: Surface, current: PP.PageSummary | null, answers: Partial<Record<string, unknown>> = {}) {
   const calls: { method: string; params: Record<string, unknown> }[] = [];
+  const resize: ((size: PP.Size) => void)[] = [];
   const answer = async (method: string, params: Record<string, unknown>, fallback: unknown) => {
     calls.push({ method, params });
     const a = answers[method];
@@ -120,12 +121,21 @@ function install(surface: Surface, current: PP.PageSummary | null, answers: Part
       setHeight: vi.fn(async () => {}),
       autoHeight: vi.fn(),
       openUrl: vi.fn(async () => {}),
+      onResize: (listener: (size: PP.Size) => void) => {
+        resize.push(listener);
+        return () => {};
+      },
     },
     theme: { onChange: () => () => {} },
     settings: { onChange: () => () => {} },
   };
   (globalThis as unknown as { pp: unknown }).pp = pp;
-  return { pp, calls };
+  /** The host saying the frame is now this wide, as `surface.resize`. */
+  const resizeTo = (width: number) => {
+    if (context.surface.type === 'panel') context.surface.size = { width, height: 0 };
+    resize.forEach((l) => l({ width, height: 0 }));
+  };
+  return { pp, calls, resizeTo };
 }
 
 const app = () => document.getElementById('app')!;
@@ -150,7 +160,7 @@ afterEach(() => {
 
 describe('the map page', () => {
   it('draws every paper of the set, with titles, and opens on the paper in its path', async () => {
-    const { pp, calls } = await boot({ type: 'page', page: 'map', path: ['openreview%3Ab'] }, null);
+    const { pp, calls } = await boot({ type: 'page', page: 'map', path: ['openreview%3Ab'] , size: { width: 1200, height: 800 } }, null);
     await vi.waitFor(() => expect(app().querySelector('.controls')).not.toBeNull());
     const asked = calls.find((c) => c.method === 'signals.columns')!;
     expect(asked.params).toEqual({ set: SET.id, signals: ['map.xy', 'map.region', 'map.cluster'], titles: true });
@@ -173,7 +183,7 @@ describe('the map page', () => {
   });
 
   it('lights the titles a search finds and the labels it names', async () => {
-    await boot({ type: 'page', page: 'map', path: [] }, null);
+    await boot({ type: 'page', page: 'map', path: [] , size: { width: 1200, height: 800 } }, null);
     await vi.waitFor(() => expect(app().querySelector('.search')).not.toBeNull());
     const input = app().querySelector<HTMLInputElement>('.search')!;
     input.value = 'agents -remember';
@@ -186,14 +196,14 @@ describe('the map page', () => {
 
   it('says so when the set is not on the site', async () => {
     const missing = Object.assign(new Error('no signal set x'), { code: 'Unavailable' });
-    await boot({ type: 'page', page: 'map', path: [] }, null, { 'signals.set': missing });
+    await boot({ type: 'page', page: 'map', path: [] , size: { width: 1200, height: 800 } }, null, { 'signals.set': missing });
     await vi.waitFor(() => expect(app().textContent).toBe('The signal set benedict-armstrong/acceptodds-map isn’t on this site.'.replace('’', "'")));
   });
 });
 
 describe('a venue’s tab', () => {
   it('maps the venue’s papers', async () => {
-    const { calls } = await boot({ type: 'panel', panel: 'map', slot: 'venue.tabs' }, page('venue', 'venue:iclr/2027', 'ICLR 2027'));
+    const { calls } = await boot({ type: 'panel', panel: 'map', slot: 'venue.tabs', place: 'tab', size: { width: 900, height: 0 } }, page('venue', 'venue:iclr/2027', 'ICLR 2027'));
     await vi.waitFor(() => expect(app().querySelector('.controls')).not.toBeNull());
     expect(calls.find((c) => c.method === 'signals.columns')!.params).toMatchObject({ scope: 'venue:iclr/2027', titles: true });
     expect(app().textContent).toContain('3 papers of ICLR 2027');
@@ -201,7 +211,7 @@ describe('a venue’s tab', () => {
 
   it('says there is nothing here when the scope has no papers on the map', async () => {
     const empty = { ...columns(), papers: [], titles: [], signals: { 'map.xy': { kind: 'vector', dims: 2, values: [] } } };
-    const { pp } = await boot({ type: 'panel', panel: 'scope-map', slot: 'topic.tabs' }, page('topic', 'topic:x'), {
+    const { pp } = await boot({ type: 'panel', panel: 'scope-map', slot: 'topic.tabs', place: 'tab', size: { width: 900, height: 0 } }, page('topic', 'topic:x'), {
       'signals.columns': empty,
     });
     await vi.waitFor(() => expect(app().textContent).toBe('No papers on this map here.'));
@@ -211,7 +221,7 @@ describe('a venue’s tab', () => {
 
 describe('a paper’s minimap', () => {
   it('draws the paper among the papers round it, with lines to its nearest by content, from two small reads', async () => {
-    const { pp, calls } = await boot({ type: 'panel', panel: 'minimap', slot: 'paper.community' }, page('paper', 'arxiv:1'));
+    const { pp, calls } = await boot({ type: 'panel', panel: 'minimap', slot: 'paper.community', place: 'community', size: { width: 640, height: 0 } }, page('paper', 'arxiv:1'));
     await vi.waitFor(() => expect(app().querySelector('.minimap')).not.toBeNull());
     const near = calls.filter((c) => c.method === 'signals.nearest').map((c) => c.params);
     expect(near).toEqual([
@@ -226,8 +236,22 @@ describe('a paper’s minimap', () => {
     expect(pp.ui.openUrl).toHaveBeenCalledWith('https://site.org/x/benedict-armstrong/paper-map/map/openreview%3Aa');
   });
 
+  it('is a figure in the main text, the side column’s size there, and follows its width', async () => {
+    const { resizeTo } = await boot(
+      { type: 'panel', panel: 'minimap', slot: 'paper.community', place: 'community', size: { width: 640, height: 0 } },
+      page('paper', 'arxiv:1'),
+    );
+    await vi.waitFor(() => expect(app().querySelector('.minimap')).not.toBeNull());
+    const box = () => app().querySelector<HTMLElement>('.minimap')!;
+    expect(box().style.height).toBe('320px');
+    resizeTo(1000);
+    expect(box().style.height).toBe('440px');
+    resizeTo(400);
+    expect(box().style.height).toBe('300px');
+  });
+
   it('says the paper isn’t on the map', async () => {
-    await boot({ type: 'panel', panel: 'minimap', slot: 'paper.community' }, page('paper', 'arxiv:2'), {
+    await boot({ type: 'panel', panel: 'minimap', slot: 'paper.community', place: 'community', size: { width: 640, height: 0 } }, page('paper', 'arxiv:2'), {
       'signals.nearest': { set: SET.id, signal: 'map.xy', paper: null, neighbours: [] },
     });
     await vi.waitFor(() => expect(app().textContent).toBe('This paper isn’t on the map.'));
