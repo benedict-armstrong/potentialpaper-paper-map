@@ -5,7 +5,7 @@ import { categoryRgb, frameAround, topicLabels } from './map';
 import { mapTheme } from './theme';
 
 /**
- * A paper's piece of the map, for the aside of its page: the paper among the papers nearest it on the map (`map.xy`),
+ * A paper's piece of the map, for the Community section of its page: the paper among the papers nearest it on the map (`map.xy`),
  * framed round it, coloured and named by cluster, with lines to its nearest papers by the set's `embedding` wherever
  * they lie (the view widens to take them in, up to a point). acceptodds' `Minimap` "as on the map", with the nearest
  * papers by embedding in place of its related papers; its redraw from the vectors isn't ported (it needs every

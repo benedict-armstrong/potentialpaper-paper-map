@@ -5,7 +5,7 @@
  *
  * - the plugin's page `map` (`/x/<id>/map[/<paper>]`): every paper of the set, opened on a paper when the path names one;
  * - a tab on a venue's, topic's or organisation's page: the same map, of that page's papers (`scope`);
- * - the aside of a paper's page: its minimap, the paper among the papers round it on the map.
+ * - a paper's Community section: its minimap, the paper among the papers round it on the map.
  */
 import './style.css';
 import { defaultStore } from './cache';

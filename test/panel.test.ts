@@ -211,7 +211,7 @@ describe('a venue’s tab', () => {
 
 describe('a paper’s minimap', () => {
   it('draws the paper among the papers round it, with lines to its nearest by content, from two small reads', async () => {
-    const { pp, calls } = await boot({ type: 'panel', panel: 'minimap', slot: 'paper.aside' }, page('paper', 'arxiv:1'));
+    const { pp, calls } = await boot({ type: 'panel', panel: 'minimap', slot: 'paper.community' }, page('paper', 'arxiv:1'));
     await vi.waitFor(() => expect(app().querySelector('.minimap')).not.toBeNull());
     const near = calls.filter((c) => c.method === 'signals.nearest').map((c) => c.params);
     expect(near).toEqual([
@@ -227,7 +227,7 @@ describe('a paper’s minimap', () => {
   });
 
   it('says the paper isn’t on the map', async () => {
-    await boot({ type: 'panel', panel: 'minimap', slot: 'paper.aside' }, page('paper', 'arxiv:2'), {
+    await boot({ type: 'panel', panel: 'minimap', slot: 'paper.community' }, page('paper', 'arxiv:2'), {
       'signals.nearest': { set: SET.id, signal: 'map.xy', paper: null, neighbours: [] },
     });
     await vi.waitFor(() => expect(app().textContent).toBe('This paper isn’t on the map.'));
