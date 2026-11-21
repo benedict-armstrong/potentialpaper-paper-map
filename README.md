@@ -15,9 +15,11 @@ the same signals can be mapped.
   `/map/<paper>` (`/map/openreview%3Aabc`) opens on that paper, selected.
 - **A tab on a venue, topic or organisation**: the same map, of that page's papers only ("No papers on this map
   here." when it has none). On a venue it shows only when the venue has submissions.
-- **On a paper** (at the end of the Community section by default; readers can move it in Settings → Paper pages): its minimap, as acceptodds draws it "as on the map". The paper among the 100 papers
-  nearest it on the map, framed round it and coloured by cluster, with lines to its 10 nearest papers by embedding
-  (the view widens to take them in). Hover names a paper, a click opens it, and "Open the full map" opens the page
+- **On a paper** (at the end of the Community section by default; readers can move it in Settings → Paper pages): its minimap, as acceptodds draws it. The paper among the 100 papers
+  nearest it on the map, coloured by cluster, with lines to its 10 nearest papers by embedding. **Redrawn** by
+  default: laid out again from those papers' `embedding` alone (UMAP over the piece, in a worker, animated from the
+  map), so papers close in content lie close; or **as on the map**, framed round the paper (the view widens to take
+  the linked ones in). The choice is remembered. A set without `embedding` shows it as on the map. Hover names a paper, a click opens it, and "Open the full map" opens the page
   on it. On a paper with no submissions it doesn't show; on one the set doesn't cover it says "This paper isn't on
   the map."
 
@@ -48,7 +50,7 @@ In `settings.json` it is `benedict-armstrong/paper-map.set`.
 
 None: signals are public. The map reads `pp.signals.set` (small: the set's generation and when it changed) and
 `pp.signals.columns` for `map.xy`, `map.region` and `map.cluster` with titles, for the whole set or one scope; a
-selection or a minimap asks `pp.signals.nearest`. Links to papers go through `pp.ui.openUrl`. No network access of
+selection or a minimap asks `pp.signals.nearest` (the minimap `with` `embedding` too, for its redraw). Links to papers go through `pp.ui.openUrl`. No network access of
 its own.
 
 The columns are the expensive part (a few MB at 40k papers). Each is kept in the plugin's own IndexedDB, stamped
@@ -77,8 +79,8 @@ under Discover.
 
 ## Not ported from acceptodds
 
-- **The minimap's redraw** from the vectors (UMAP over the piece): it needs every drawn paper's embedding, and the
-  host has no way to read a signal for a list of papers short of the whole column (64 dims × 40k papers).
+- **Related papers** in the minimap's redraw: acceptodds ties its similarity service's related pairs close; a signal
+  set has none, so only the paper's nearest by embedding are.
 - **The server's search**: authors, abstracts and filters (`author:`, `keyword:`). This one searches titles.
 - **The selection in the address bar**: a plugin page can't change its own URL, so a selection isn't kept there.
 - Odds colouring, prices and "yours" (starred, held): those are acceptodds' markets.

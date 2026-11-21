@@ -1,18 +1,19 @@
 import { MapCanvas } from './canvas';
-import { CLUSTER, groupName, mapPageUrl, paperUrl, XY, type MapData } from './data';
+import { CLUSTER, EMBEDDING, groupName, mapPageUrl, paperUrl, XY, type MapData } from './data';
 import { el } from './dom';
+import type { LayoutFrame, LayoutRequest } from './layout.worker';
 import { categoryRgb, frameAround, topicLabels } from './map';
 import { mapTheme } from './theme';
 
 /**
  * A paper's piece of the map, at the end of its page's Community section by default (a reader may move it): the paper among the papers nearest it on the map (`map.xy`),
  * framed round it, coloured and named by cluster, with lines to its nearest papers by the set's `embedding` wherever
- * they lie (the view widens to take them in, up to a point). acceptodds' `Minimap` "as on the map", with the nearest
- * papers by embedding in place of its related papers; its redraw from the vectors isn't ported (it needs every
- * paper's vector, which the host can't give cheaply yet).
+ * they lie (the view widens to take them in, up to a point). acceptodds' `Minimap`, with the nearest papers by
+ * embedding in place of its related papers: redrawn by default from the papers' `embedding` vectors (`embedAround`,
+ * in a worker, animated from the map), or "as on the map".
  *
- * It draws from two `nearest` answers alone (`minimapColumns`), each a few KB the site caches per paper, not the
- * whole map: a reader moving between papers costs the site almost nothing.
+ * It draws from two `nearest` answers alone (`minimapColumns`, `vectorsOf`), each a few KB the site caches per paper,
+ * not the whole map: a reader moving between papers costs the site almost nothing.
  */
 
 /**
@@ -32,12 +33,18 @@ const MIN_LABELLED = 6;
 const DOT_RADIUS = 3.2;
 /** Papers other than this one and its linked ones: there, but behind. */
 const CONTEXT_OPACITY = 0.45;
+/** Whether the reader last chose "redrawn" or "as on the map" (redrawn unless they chose the map). */
+const REDRAW_KEY = 'paper-map:minimap-redraw';
 
 export interface Piece {
   /** Indexes into the map's papers: this paper first, then its nearest on the map, then linked ones not among them. */
   points: number[];
   /** Interleaved positions, framed round the paper (`frameAround`). */
   positions: Float32Array;
+  /** Interleaved positions as on the set's map, unframed: where a redraw starts from. */
+  start: Float32Array;
+  /** Each point's `embedding`, in `points`' order, for the redraw; `null` unless every point has one. */
+  vectors: number[][] | null;
   /** Indexes into `points` that get a line from the paper, nearest by embedding first. */
   linked: number[];
   /** Titles by position in `points`, where the map has none (`nearest` names the linked ones). */
@@ -91,6 +98,21 @@ export function minimapColumns(
   };
 }
 
+/** Each paper's `embedding` in the two `nearest` answers (asked `with` it), by paper. */
+export function vectorsOf(...answers: (Nearest | null)[]): Map<string, number[]> {
+  const out = new Map<string, number[]>();
+  const add = (paper: string | null, values: Record<string, unknown> | undefined) => {
+    const v = values?.[EMBEDDING];
+    if (paper && Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'number')) out.set(paper, v);
+  };
+  for (const a of answers) {
+    if (!a) continue;
+    add(a.paper, a.values);
+    for (const n of a.neighbours) add(n.paper, n.values);
+  }
+  return out;
+}
+
 /** The `k` papers nearest point `at` on the map, nearest first, without it. */
 export function nearestOnMap(positions: Float32Array, at: number, k: number): number[] {
   const n = positions.length / 2;
@@ -107,6 +129,7 @@ export function pieceOf(
   data: MapData,
   self: string,
   neighbours: readonly { paper: string; title: string }[],
+  vectors: ReadonlyMap<string, number[]> = new Map(),
 ): Piece | null {
   const at = data.byPaper.get(self);
   if (at === undefined) return null;
@@ -130,7 +153,15 @@ export function pieceOf(
     raw[2 * k] = data.positions[2 * i];
     raw[2 * k + 1] = data.positions[2 * i + 1];
   });
-  return { points, positions: frameAround(raw, 0, linked, MINIMAP_NEAREST), linked, titles };
+  const own = points.map((i) => vectors.get(data.papers[i]));
+  return {
+    points,
+    positions: frameAround(raw, 0, linked, MINIMAP_NEAREST),
+    start: raw,
+    vectors: points.length >= 4 && own.every((v) => v !== undefined) ? (own as number[][]) : null,
+    linked,
+    titles,
+  };
 }
 
 export function showMinimap(o: {
@@ -153,14 +184,11 @@ export function showMinimap(o: {
   const full = el('button', { type: 'button', className: 'link' }, 'Open the full map');
   full.addEventListener('click', () => void pp.ui.openUrl(mapPageUrl(o.site, o.pluginId, o.paper)));
   footer.append(full);
-  const caption = el(
-    'p',
-    { className: 'caption' },
-    'This paper (marked) among the papers around it on the map, coloured by cluster. ' +
-      `${piece.linked.length > 0 ? `Lines go to the ${piece.linked.length} papers closest to it in content. ` : ''}` +
-      'Click a paper to open it; ⌘/Ctrl + scroll to zoom.',
-  );
+  const switcher = el('div', { className: 'float switch' });
+  const caption = el('p', { className: 'caption' });
   o.root.replaceChildren(box, caption);
+  const redrawable = piece.vectors !== null;
+  let redraw = redrawable && loadRedraw();
 
   const colours = new Uint8Array(points.length * 4);
   const groups = Int32Array.from(points, (i) => data.group.cluster[i]);
@@ -168,7 +196,15 @@ export function showMinimap(o: {
     colours.set(categoryRgb(g < 0 ? null : data.groups.cluster[g].number), 4 * k);
     colours[4 * k + 3] = 220;
   });
-  const clusters = topicLabels(piece.positions, groups, data.names.cluster, MIN_LABELLED);
+  // What is drawn: the map's piece, or the redraw's latest frame (`null` until the worker sends its first).
+  let frame: { positions: Float32Array; settled: boolean } | null = null;
+  const shown = () => (redraw && frame ? frame : { positions: piece.positions, settled: true });
+  // Named once it stops moving: labels chasing a settling layout only flicker.
+  const labels = () => {
+    const { positions, settled } = shown();
+    return settled ? topicLabels(positions, groups, data.names.cluster, MIN_LABELLED) : [];
+  };
+  let clusters = labels();
 
   const titleOf = (k: number) => piece.titles.get(k) ?? data.titles?.[points[k]] ?? data.papers[points[k]];
   const open = (k: number) => {
@@ -201,10 +237,11 @@ export function showMinimap(o: {
     onOpen: open,
   });
   box.append(tooltip, footer);
+  if (redrawable) box.append(switcher);
   let theme = mapTheme(pp.context?.theme);
   const draw = () =>
     canvas.update({
-      positions: piece.positions,
+      positions: shown().positions,
       colours,
       shown: null,
       regions: [],
@@ -215,9 +252,71 @@ export function showMinimap(o: {
       highlight: [],
       theme,
     });
+
+  function renderControls() {
+    const choice = (on: boolean, text: string, to: boolean) => {
+      if (on) return el('span', { className: 'on' }, text);
+      const b = el('button', { type: 'button', className: 'link' }, text);
+      b.addEventListener('click', () => setRedraw(to));
+      return b;
+    };
+    switcher.replaceChildren(choice(redraw, 'redrawn', true), ' · ', choice(!redraw, 'as on the map', false));
+    const lines =
+      piece.linked.length > 0 ? `Lines go to the ${piece.linked.length} papers closest to it in content. ` : '';
+    caption.textContent =
+      'This paper (marked) with the papers around it on the map, coloured by cluster. ' +
+      (redraw
+        ? 'Redrawn from the papers’ embeddings alone, so that papers close in content lie close; turned as on the map. '
+        : 'Placed as on the map. ') +
+      lines +
+      'Click a paper to open it; ⌘/Ctrl + scroll to zoom.';
+  }
+
+  // The redraw, in the map page's worker, frame by frame.
+  let worker: Worker | null = null;
+  function relayout() {
+    worker?.terminate();
+    worker = null;
+    frame = null;
+    if (!redraw || !piece.vectors) return;
+    const still = matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    try {
+      worker = new Worker(new URL('./layout.worker.ts', import.meta.url), { type: 'module' });
+    } catch {
+      return; // No workers here: it stays as on the map.
+    }
+    worker.onmessage = (e: MessageEvent<LayoutFrame>) => {
+      if (still && !e.data.settled) return;
+      // Redrawn, the piece is compact round the paper: fit all of it, not only the nearest.
+      const positions = frameAround(e.data.positions, 0, piece.linked, points.length - 1);
+      frame = { positions, settled: e.data.settled };
+      if (e.data.settled) clusters = labels();
+      draw();
+    };
+    const start = Float32Array.from(piece.start);
+    worker.postMessage(
+      { id: 1, start, around: { vectors: piece.vectors, self: 0, linked: [...piece.linked] } } satisfies LayoutRequest,
+      { transfer: [start.buffer] },
+    );
+  }
+
+  function setRedraw(on: boolean) {
+    redraw = on;
+    saveRedraw(on);
+    relayout();
+    clusters = labels();
+    renderControls();
+    draw();
+  }
+
+  renderControls();
   draw();
+  relayout();
   return {
-    destroy: () => canvas.destroy(),
+    destroy: () => {
+      worker?.terminate();
+      canvas.destroy();
+    },
     setHeight(height) {
       box.style.height = `${height}px`;
     },
@@ -226,4 +325,20 @@ export function showMinimap(o: {
       draw();
     },
   };
+}
+
+function loadRedraw(): boolean {
+  try {
+    return localStorage.getItem(REDRAW_KEY) !== 'map';
+  } catch {
+    return true;
+  }
+}
+
+function saveRedraw(on: boolean) {
+  try {
+    localStorage.setItem(REDRAW_KEY, on ? 'redrawn' : 'map');
+  } catch {
+    // Remembering the choice is optional.
+  }
 }

@@ -56,10 +56,10 @@ type Surface = PP.Context['surface'];
 /** The host's `nearest`, over the fixture's papers: by `map.xy` (a then d's neighbours) or by `embedding`. */
 function nearest(params: Record<string, unknown>) {
   const values: Record<string, Record<string, unknown>> = {
-    'openreview:a': { 'map.xy': [0, 0], 'map.cluster': '12' },
-    'openreview:b': { 'map.xy': [1, 0], 'map.cluster': '40' },
-    'openreview:c': { 'map.xy': [10, 5], 'map.cluster': null },
-    'openreview:e': { 'map.xy': [0.5, 0.5], 'map.cluster': '12' },
+    'openreview:a': { 'map.xy': [0, 0], 'map.cluster': '12', embedding: [1, 0, 0] },
+    'openreview:b': { 'map.xy': [1, 0], 'map.cluster': '40', embedding: [0.9, 0.1, 0] },
+    'openreview:c': { 'map.xy': [10, 5], 'map.cluster': null, embedding: [0.5, 0.5, 0] },
+    'openreview:e': { 'map.xy': [0.5, 0.5], 'map.cluster': '12', embedding: [0, 1, 0] },
   };
   const withValues = Array.isArray(params.with) && params.with.length > 0;
   const of = (paper: string) => (withValues ? { values: values[paper] } : {});
@@ -225,8 +225,8 @@ describe('a paper’s minimap', () => {
     await vi.waitFor(() => expect(app().querySelector('.minimap')).not.toBeNull());
     const near = calls.filter((c) => c.method === 'signals.nearest').map((c) => c.params);
     expect(near).toEqual([
-      { set: SET.id, signal: 'map.xy', paper: 'arxiv:1', k: 100, with: ['map.xy', 'map.cluster'] },
-      { set: SET.id, signal: 'embedding', paper: 'arxiv:1', k: 10, with: ['map.xy', 'map.cluster'] },
+      { set: SET.id, signal: 'map.xy', paper: 'arxiv:1', k: 100, with: ['map.xy', 'map.cluster', 'embedding'] },
+      { set: SET.id, signal: 'embedding', paper: 'arxiv:1', k: 10, with: ['map.xy', 'map.cluster', 'embedding'] },
     ]);
     // Not the whole map.
     expect(calls.some((c) => c.method === 'signals.columns')).toBe(false);
@@ -234,6 +234,23 @@ describe('a paper’s minimap', () => {
     expect(drawn.update.at(-1)).toMatchObject({ selected: 0, neighbours: [2, 3], labelMode: 'cluster' });
     app().querySelector<HTMLButtonElement>('.footer button')!.click();
     expect(pp.ui.openUrl).toHaveBeenCalledWith('https://site.org/x/benedict-armstrong/paper-map/map/openreview%3Aa');
+  });
+
+  it('is redrawn from the embeddings by default, and can be shown as on the map, remembered', async () => {
+    localStorage.removeItem('paper-map:minimap-redraw');
+    await boot(
+      { type: 'panel', panel: 'minimap', slot: 'paper.community', place: 'community', size: { width: 640, height: 0 } },
+      page('paper', 'arxiv:1'),
+    );
+    await vi.waitFor(() => expect(app().querySelector('.minimap')).not.toBeNull());
+    const switcher = () => app().querySelector('.switch')!;
+    expect(switcher().querySelector('.on')!.textContent).toBe('redrawn');
+    expect(app().querySelector('.caption')!.textContent).toContain('Redrawn from the papers’ embeddings');
+    [...switcher().querySelectorAll('button')].find((b) => b.textContent === 'as on the map')!.click();
+    expect(switcher().querySelector('.on')!.textContent).toBe('as on the map');
+    expect(app().querySelector('.caption')!.textContent).toContain('Placed as on the map');
+    expect(localStorage.getItem('paper-map:minimap-redraw')).toBe('map');
+    localStorage.removeItem('paper-map:minimap-redraw');
   });
 
   it('is a figure in the main text, the side column’s size there, and follows its width', async () => {

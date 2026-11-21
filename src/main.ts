@@ -13,7 +13,15 @@ import { CLUSTER, EMBEDDING, fromColumns, paperFromPath, setOf, XY } from './dat
 import { el, note } from './dom';
 import { showFullMap } from './fullmap';
 import { failureText, loadColumns, type ColumnsStore } from './load';
-import { MINIMAP_LINES, MINIMAP_NEAREST, minimapColumns, minimapHeight, pieceOf, showMinimap } from './minimap';
+import {
+  MINIMAP_LINES,
+  MINIMAP_NEAREST,
+  minimapColumns,
+  minimapHeight,
+  pieceOf,
+  showMinimap,
+  vectorsOf,
+} from './minimap';
 import { signals as sig } from './signals';
 
 const app = document.getElementById('app')!;
@@ -77,11 +85,11 @@ async function start(ctx: PP.Context) {
     if (!ctx.page) return message('Nothing to map here.');
     if (surface.panel === 'minimap') {
       // Two small answers the site caches per paper, not the whole map: the papers round this one on the map, and
-      // its nearest by content, each with what the minimap draws of them.
+      // its nearest by content, each with what the minimap draws of them and their embeddings, for the redraw.
       const info = await sig.set(set);
       const names = new Set(info.signals.map((s) => s.name));
       if (!names.has(XY)) return message(`The signal set ${set} has no "${XY}" signal, so it can't be drawn.`);
-      const drawn = [XY, CLUSTER].filter((s) => names.has(s));
+      const drawn = [XY, CLUSTER, EMBEDDING].filter((s) => names.has(s));
       const [onMap, byContent] = await Promise.all([
         sig.nearest(set, XY, undefined, { k: MINIMAP_NEAREST, with: drawn }),
         names.has(EMBEDDING) ? sig.nearest(set, EMBEDDING, undefined, { k: MINIMAP_LINES, with: drawn }) : null,
@@ -89,7 +97,7 @@ async function start(ctx: PP.Context) {
       if (token !== run) return;
       const columns = minimapColumns(set, onMap, byContent, ctx.page.name);
       const data = columns && fromColumns(columns);
-      const piece = data && onMap.paper ? pieceOf(data, onMap.paper, byContent?.neighbours ?? []) : null;
+      const piece = data && onMap.paper ? pieceOf(data, onMap.paper, byContent?.neighbours ?? [], vectorsOf(onMap, byContent)) : null;
       if (!data || !piece || !onMap.paper) return message('This paper isn’t on the map.');
       app.className = '';
       view = showMinimap({

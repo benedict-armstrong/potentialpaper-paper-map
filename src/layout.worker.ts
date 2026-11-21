@@ -1,9 +1,9 @@
-import { settle } from './layout';
+import { embedAround, settle } from './layout';
 
 /**
- * Runs `settle` off the main thread, so the map stays smooth while a search's matches are laid out again. One job at
- * a time: a newer request (or `{ id, stop }`) ends the current one between frames. Frames go back with their buffers
- * transferred, not copied.
+ * Runs `settle` (a search's matches) or `embedAround` (the minimap's redraw) off the main thread, so the map stays
+ * smooth while it is laid out again. One job at a time: a newer request (or `{ id, stop }`) ends the current one
+ * between frames. Frames go back with their buffers transferred, not copied.
  */
 
 export type LayoutRequest =
@@ -12,6 +12,12 @@ export type LayoutRequest =
       start: Float32Array;
       /** The cluster per point, -1 for none. */
       groups: Int32Array;
+    }
+  /** Round one paper (`embedAround`, the minimap's redraw) rather than spread over the frame (`settle`). */
+  | {
+      id: number;
+      start: Float32Array;
+      around: { vectors: number[][]; self: number; linked: number[] };
     }
   | { id: number; stop: true };
 export type LayoutFrame = { id: number; positions: Float32Array; settled: boolean };
@@ -22,7 +28,10 @@ self.onmessage = async (e: MessageEvent<LayoutRequest>) => {
   const job = e.data;
   current = job.id;
   if ('stop' in job) return;
-  const frames = settle(job.start, job.groups);
+  const frames =
+    'around' in job
+      ? embedAround(job.start, job.around.vectors, job.around.self, job.around.linked)
+      : settle(job.start, job.groups);
   let next = frames.next();
   while (!next.done) {
     const following = frames.next();

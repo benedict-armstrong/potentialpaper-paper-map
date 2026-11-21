@@ -250,6 +250,11 @@ button.title {
   right: 6px;
   bottom: 6px;
 }
+.switch {
+  left: 6px;
+  bottom: 6px;
+  color: var(--muted);
+}
 .caption {
   margin-top: 4px;
   color: var(--muted);

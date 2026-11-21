@@ -1,6 +1,6 @@
 {
   "name": "potentialpaper-paper-map",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "description": "A PotentialPaper plugin: every paper on a map, near the papers most like it, from a signal set.",
   "license": "MIT",
@@ -16,7 +16,8 @@
     "@deck.gl/core": "9.4.0",
     "@deck.gl/extensions": "9.4.0",
     "@deck.gl/layers": "9.4.0",
-    "d3-force": "^3.0.0"
+    "d3-force": "^3.0.0",
+    "umap-js": "^1.4.0"
   },
   "devDependencies": {
     "@types/d3-force": "^3.0.10",

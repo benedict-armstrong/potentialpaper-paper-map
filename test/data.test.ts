@@ -115,6 +115,16 @@ describe('pieceOf (the minimap)', () => {
   it('is nothing for a paper not on the map', () => {
     expect(pieceOf(data, 'openreview:d', [])).toBeNull();
   });
+  it('carries every point’s vector for the redraw, or none when one is missing', () => {
+    const v = new Map(data.papers.map((p, i) => [p, [i, 1]]));
+    const piece = pieceOf(data, 'openreview:a', [], v)!;
+    expect(piece.points.length).toBeGreaterThanOrEqual(3);
+    // Too few papers to lay out again.
+    if (piece.points.length < 4) expect(piece.vectors).toBeNull();
+    else expect(piece.vectors).toEqual(piece.points.map((i) => [i, 1]));
+    v.delete(data.papers[piece.points[1]]);
+    expect(pieceOf(data, 'openreview:a', [], v)!.vectors).toBeNull();
+  });
 });
 
 describe('nearestOnMap', () => {

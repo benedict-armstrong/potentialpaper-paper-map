@@ -1,4 +1,13 @@
-import { forceLink, forceManyBody, forceSimulation, forceX, forceY, type SimulationNodeDatum } from 'd3-force';
+import {
+  forceCollide,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  forceX,
+  forceY,
+  type SimulationNodeDatum,
+} from 'd3-force';
+import { UMAP } from 'umap-js';
 import { MAP_SIZE, normalise } from './map';
 
 /**
@@ -97,6 +106,145 @@ export function* settle(start: Float32Array, groups: Int32Array): Generator<Floa
     simulation.tick(TICKS_PER_SLICE);
     yield normalise(flat(nodes));
   }
+}
+
+/** `embedAround` works in multiples of a dot's room, `ROOM`: the caller rescales (`frameAround`). */
+const ROOM = 10;
+/** Neighbours on the redrawn piece sit about this many `ROOM`s apart. */
+const SPACING = 1.6;
+/** Neighbours each paper is tied to in the redraw's graph. Few, so the piece breaks into its own groups. */
+const AROUND_NEIGHBOURS = 7;
+/** A linked pair's distance, as a share of the nearer end's distance to its nearest paper. */
+const LINKED_NEAR = 0.9;
+/** UMAP's: how tightly a neighbourhood packs (low, so groups read as groups), and how long it optimises. */
+const MIN_DIST = 0.02;
+const EPOCHS = 400;
+/** Frames the redraw is animated over, from the map to the layout. */
+const AROUND_FRAMES = 36;
+
+/**
+ * Lay out a paper's piece of the map again round it, for the minimap, from the papers' `embedding` vectors rather
+ * than the 2D map: the map flattens the whole set into a plane, and locally it is an even spread, while the vectors
+ * still say which of these papers are close. Ported from acceptodds' `lib/map-layout.ts` `embedAround`.
+ *
+ * UMAP (`umap-js`) over the piece alone: a k-nearest-neighbour graph by cosine distance between `vectors`, with the
+ * paper's `linked` papers (its nearest by embedding, indexes) always among its neighbours. It starts from the map's
+ * positions (`start`), so the piece keeps the map's orientation, and a fixed seed makes it the same every time. Dots
+ * are then pushed apart where they would overlap.
+ *
+ * Yields frames easing from the map (compressed round the paper) to the layout; the last is the layout. Not
+ * normalised: the paper sits at the centre and the caller frames round it (`frameAround`). Display only.
+ */
+export function* embedAround(
+  start: Float32Array,
+  vectors: readonly (readonly number[])[],
+  self: number,
+  linked: readonly number[],
+): Generator<Float32Array> {
+  const n = start.length / 2;
+  const cx = MAP_SIZE / 2;
+  const k = Math.min(AROUND_NEIGHBOURS, n - 2);
+  if (k < 2) {
+    yield normalise(start);
+    return;
+  }
+
+  const distance = Array.from({ length: n }, (_, a) =>
+    Float64Array.from({ length: n }, (_, b) => (a === b ? 0 : cosineDistance(vectors[a], vectors[b]))),
+  );
+  // A linked paper counts as near as either end's nearest paper, so it is always in the graph.
+  const nearest = distance.map((row, a) => Math.min(...row.filter((_, b) => b !== a)));
+  for (const b of linked) {
+    if (b === self) continue;
+    distance[self][b] = distance[b][self] = Math.min(distance[self][b], LINKED_NEAR * Math.min(nearest[self], nearest[b]));
+  }
+  // UMAP's convention: each point is its own first neighbour, at distance 0.
+  const knn = distance.map((row, a) =>
+    [a, ...Array.from({ length: n }, (_, b) => b).filter((b) => b !== a)]
+      .sort((x, y) => (x === a ? -1 : y === a ? 1 : row[x] - row[y] || x - y))
+      .slice(0, k + 1),
+  );
+  const umap = new UMAP({ nComponents: 2, nNeighbors: k + 1, minDist: MIN_DIST, nEpochs: EPOCHS, random: seeded(1) });
+  umap.setPrecomputedKNN(
+    knn,
+    knn.map((ns, a) => ns.map((b) => distance[a][b])),
+  );
+  umap.initializeFit(vectors.map((v) => [...v]));
+  // Start from the map, round the paper, at about UMAP's own scale ([-10, 10]), in place of its random start.
+  const far = Math.max(...Array.from({ length: n }, (_, i) => apartIn(start, i, self)), 1e-9);
+  umap.getEmbedding().forEach((e, i) => {
+    e[0] = ((start[2 * i] - start[2 * self]) / far) * 10;
+    e[1] = ((start[2 * i + 1] - start[2 * self + 1]) / far) * 10;
+  });
+  for (let e = 0; e < EPOCHS; e++) umap.step();
+  const embedded = umap.getEmbedding();
+
+  // Rescaled so neighbours sit `SPACING` rooms apart, the paper at the centre, then overlaps pushed apart.
+  const placed = Float32Array.from(embedded.flat());
+  const typical = median(nearestNeighbours(placed, 1).map(([b], a) => apartIn(placed, a, b))) || 1;
+  const unit = (SPACING * ROOM) / typical;
+  const nodes: (Node & { tx: number; ty: number })[] = embedded.map(([x, y]) => {
+    const tx = (x - embedded[self][0]) * unit;
+    const ty = (y - embedded[self][1]) * unit;
+    return { x: tx, y: ty, tx, ty };
+  });
+  nodes[self].fx = 0;
+  nodes[self].fy = 0;
+  forceSimulation(nodes)
+    .force('collide', forceCollide<Node>(ROOM / 2).strength(0.9))
+    .force('x', forceX<(typeof nodes)[number]>((d) => d.tx).strength(0.05))
+    .force('y', forceY<(typeof nodes)[number]>((d) => d.ty).strength(0.05))
+    .stop()
+    .tick(120);
+  const end = new Float32Array(2 * n);
+  nodes.forEach((d, i) => {
+    end[2 * i] = cx + d.x;
+    end[2 * i + 1] = cx + d.y;
+  });
+
+  // From the map, compressed round the paper to about the layout's size, eased to the layout.
+  const reach = Math.max(...Array.from({ length: n }, (_, i) => Math.hypot(end[2 * i] - cx, end[2 * i + 1] - cx)), 1);
+  const begin = new Float32Array(2 * n);
+  for (let i = 0; i < n; i++) {
+    const d = apartIn(start, i, self);
+    const f = d === 0 ? 0 : (reach * Math.sqrt(d / far)) / d;
+    begin[2 * i] = cx + (start[2 * i] - start[2 * self]) * f;
+    begin[2 * i + 1] = cx + (start[2 * i + 1] - start[2 * self + 1]) * f;
+  }
+  for (let f = 1; f <= AROUND_FRAMES; f++) {
+    const t = f / AROUND_FRAMES;
+    const e = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+    yield begin.map((b, j) => b + (end[j] - b) * e);
+  }
+}
+
+/** Cosine distance: 0 for the same direction, 2 for opposite; a zero vector is 1 from everything. */
+export function cosineDistance(a: ArrayLike<number>, b: ArrayLike<number>): number {
+  let dot = 0;
+  let aa = 0;
+  let bb = 0;
+  for (let k = 0; k < a.length; k++) {
+    dot += a[k] * b[k];
+    aa += a[k] * a[k];
+    bb += b[k] * b[k];
+  }
+  return aa === 0 || bb === 0 ? 1 : 1 - dot / Math.sqrt(aa * bb);
+}
+
+/** A small seeded generator (mulberry32), so the same piece always lays out the same. */
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function apartIn(p: Float32Array, a: number, b: number): number {
+  return Math.hypot(p[2 * a] - p[2 * b], p[2 * a + 1] - p[2 * b + 1]);
 }
 
 function median(values: number[]): number {
