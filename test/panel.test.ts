@@ -211,7 +211,7 @@ describe('a venue’s tab', () => {
 
   it('says there is nothing here when the scope has no papers on the map', async () => {
     const empty = { ...columns(), papers: [], titles: [], signals: { 'map.xy': { kind: 'vector', dims: 2, values: [] } } };
-    const { pp } = await boot({ type: 'panel', panel: 'scope-map', slot: 'topic.tabs', place: 'tab', size: { width: 900, height: 0 } }, page('topic', 'topic:x'), {
+    const { pp } = await boot({ type: 'panel', panel: 'scope-map', slot: 'category.tabs', place: 'tab', size: { width: 900, height: 0 } }, page('category', 'category:x'), {
       'signals.columns': empty,
     });
     await vi.waitFor(() => expect(app().textContent).toBe('No papers on this map here.'));

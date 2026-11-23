@@ -4,7 +4,7 @@
  */
 
 declare namespace PP {
-  type PageKind = 'paper' | 'venue' | 'topic' | 'org' | 'user';
+  type PageKind = 'paper' | 'venue' | 'category' | 'org' | 'user';
 
   type Permission = 'page.read' | 'scope.read' | 'reviews.read' | 'identity';
   type Outcome = 'accepted' | 'rejected' | 'withdrawn' | 'pending';
@@ -20,7 +20,7 @@ declare namespace PP {
   /** A page as plugins see it. */
   interface PageSummary {
     kind: PageKind;
-    /** Its public identifier: `venue:iclr/2027`, `arxiv:1706.03762`, `topic:linear-attention`. */
+    /** Its public identifier: `venue:iclr/2027`, `arxiv:1706.03762`, `category:linear-attention`. */
     identifier: string;
     /** Its path on the site. */
     address: string;

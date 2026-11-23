@@ -4,7 +4,7 @@
  * `map.cluster`, `embedding`). Three surfaces, one frame each:
  *
  * - the plugin's page `map` (`/x/<id>/map[/<paper>]`): every paper of the set, opened on a paper when the path names one;
- * - a tab on a venue's, topic's or organisation's page: the same map, of that page's papers (`scope`);
+ * - a tab on a venue's, category's or organisation's page: the same map, of that page's papers (`scope`);
  * - a paper's Community section: its minimap, the paper among the papers round it on the map.
  */
 import './style.css';

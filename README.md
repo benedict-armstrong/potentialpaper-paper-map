@@ -13,7 +13,7 @@ the same signals can be mapped.
   `-not`): what it finds stays lit, the rest fades, and topic labels it names turn blue. With **redraw** (on by
   default) the rest is hidden and the matches are laid out again among themselves, in a worker (up to 10,000).
   `/map/<paper>` (`/map/openreview%3Aabc`) opens on that paper, selected.
-- **A tab on a venue, topic or organisation**: the same map, of that page's papers only ("No papers on this map
+- **A tab on a venue, category or organisation**: the same map, of that page's papers only ("No papers on this map
   here." when it has none). On a venue it shows only when the venue has submissions.
 - **On a paper** (at the end of the Community section by default; readers can move it in Settings → Paper pages): its minimap, as acceptodds draws it. The paper among the 100 papers
   nearest it on the map, coloured by cluster, with lines to its 10 nearest papers by embedding. **Redrawn** by
