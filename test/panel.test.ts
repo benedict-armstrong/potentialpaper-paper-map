@@ -194,6 +194,19 @@ describe('the map page', () => {
     expect(drawn.update.at(-1)).toMatchObject({ highlight: ['agents'] });
   });
 
+  it('shows only a grouping’s papers when it is clicked in the legend, and every paper on a second click', async () => {
+    await boot({ type: 'page', page: 'map', path: [] , size: { width: 1200, height: 800 } }, null);
+    await vi.waitFor(() => expect(app().querySelector('.legend button')).not.toBeNull());
+    app().querySelector<HTMLButtonElement>('.legend button')!.click();
+    const input = app().querySelector<HTMLInputElement>('.search')!;
+    expect(input.value).toBe('region:"llm agents · skills"');
+    expect(app().querySelector('.status')?.textContent).toContain('2 matches');
+    expect(app().querySelector('.legend button')!.classList.contains('chosen')).toBe(true);
+    app().querySelector<HTMLButtonElement>('.legend button')!.click();
+    expect(input.value).toBe('');
+    expect(app().querySelector('.hits')).toBeNull();
+  });
+
   it('says so when the set is not on the site', async () => {
     const missing = Object.assign(new Error('no signal set x'), { code: 'Unavailable' });
     await boot({ type: 'page', page: 'map', path: [] , size: { width: 1200, height: 800 } }, null, { 'signals.set': missing });

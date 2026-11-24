@@ -10,7 +10,8 @@ the same signals can be mapped.
   when zoomed out and cluster names when zoomed in (or always one, or none). Hover a dot for its title and cluster;
   click to select it, which draws lines to its 10 nearest papers by the set's embedding and lists them; click again,
   or ⌘/Ctrl-click, to open the paper. The search box finds titles (words match at the start of a word, `"a phrase"`,
-  `-not`): what it finds stays lit, the rest fades, and topic labels it names turn blue. With **redraw** (on by
+  `-not`, and `region:"…"` or `cluster:"…"` for one grouping's papers, which clicking it in the legend fills in): what it
+  finds stays lit, the rest fades, and topic labels it names turn blue. With **redraw** (on by
   default) the rest is hidden and the matches are laid out again among themselves, in a worker (up to 10,000).
   `/map/<paper>` (`/map/openreview%3Aabc`) opens on that paper, selected.
 - **A tab on a venue, category or organisation**: the same map, of that page's papers only ("No papers on this map

@@ -14,7 +14,7 @@ import {
 import { el, toggle } from './dom';
 import { MAX_RELAYOUT } from './layout';
 import type { LayoutFrame, LayoutRequest } from './layout.worker';
-import { categoryRgb, labelTerms, searchTitles, topicLabels, type TopicLabel } from './map';
+import { categoryRgb, groupQuery, labelTerms, searchTitles, topicLabels, type TopicLabel } from './map';
 import { mapTheme } from './theme';
 import { setPath, signals as sig } from './signals';
 
@@ -261,17 +261,27 @@ export function showFullMap(o: FullMapOptions): { destroy(): void; setTheme(them
       });
   }
 
+  const anyTitles = data.titles ?? data.papers.map(() => '');
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
-  function search(text: string) {
+  function search(text: string, now = false) {
     query = text;
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
+    const run = () => {
       asked = query.trim();
-      matches = asked && data.titles ? searchTitles(data.titles, asked) : null;
+      matches = asked ? searchTitles(anyTitles, asked, (by, i) => groupName(data, by, i)) : null;
       relayout();
       draw();
       renderPanel();
-    }, SEARCH_DEBOUNCE_MS);
+    };
+    if (now) run();
+    else searchTimer = setTimeout(run, SEARCH_DEBOUNCE_MS);
+  }
+
+  /** A click on a grouping in the legend searches for its papers alone; a second click clears the search. */
+  function chooseGroup(name: string) {
+    const q = groupQuery(prefs.colourBy, name);
+    input.value = asked === q ? '' : q;
+    search(input.value, true);
   }
 
   // The panel: rebuilt whole on each change but the search box, which keeps its focus and caret.
@@ -283,7 +293,6 @@ export function showFullMap(o: FullMapOptions): { destroy(): void; setTheme(them
   });
   input.setAttribute('aria-label', 'Search titles');
   input.addEventListener('input', () => search(input.value));
-  if (!data.titles) input.disabled = true;
 
   function renderPanel() {
     const count = data.papers.length.toLocaleString('en-US');
@@ -322,8 +331,8 @@ export function showFullMap(o: FullMapOptions): { destroy(): void; setTheme(them
 
     const status = !asked
       ? data.titles
-        ? 'Words search the titles.'
-        : 'No titles to search.'
+        ? 'Words search the titles. Click a colour to show only its papers.'
+        : 'No titles to search. Click a colour to show only its papers.'
       : `${matches!.length.toLocaleString('en-US')} ${matches!.length === 1 ? 'match' : 'matches'}${relayoutNote()}`;
     const searchBox = el('div', { className: 'searchbox' }, input);
     const line = el('div', { className: 'status' }, el('span', {}, status));
@@ -359,17 +368,19 @@ export function showFullMap(o: FullMapOptions): { destroy(): void; setTheme(them
     return layout?.settled ? ', laid out again' : ', laying out…';
   }
 
-  /** The legend: each grouping with its colour, largest first; pointing at one lights its papers. */
+  /** The legend: each grouping with its colour, largest first; pointing at one lights its papers, clicking it shows only them. */
   function legend(): HTMLElement {
     const groups = data.groups[prefs.colourBy].filter((g) => g.size > 0).sort((a, b) => b.size - a.size);
     const list = el('ul', { className: 'legend' });
     for (const g of groups) {
       const [r, gg, b] = categoryRgb(g.number);
+      const name = g.title ?? g.key;
+      const chosen = asked === groupQuery(prefs.colourBy, name);
       const item = el(
         'button',
-        { type: 'button', className: pointed === g.index ? 'on' : '' },
+        { type: 'button', className: `${pointed === g.index ? 'on' : ''}${chosen ? ' chosen' : ''}`.trim() },
         el('span', { className: 'swatch', style: `background: rgb(${r},${gg},${b})` }),
-        g.title ?? g.key,
+        name,
         el('span', { className: 'count' }, ` ${g.size.toLocaleString('en-US')}`),
       );
       const point = (on: boolean) => {
@@ -377,6 +388,8 @@ export function showFullMap(o: FullMapOptions): { destroy(): void; setTheme(them
         item.classList.toggle('on', on);
         draw();
       };
+      item.title = chosen ? 'Show every paper' : 'Show only these papers';
+      item.addEventListener('click', () => chooseGroup(name));
       item.addEventListener('mouseenter', () => point(true));
       item.addEventListener('mouseleave', () => point(false));
       item.addEventListener('focus', () => point(true));

@@ -166,7 +166,11 @@ button.link:hover {
   color: var(--muted);
   font: inherit;
   text-align: left;
-  cursor: default;
+  cursor: pointer;
+}
+.legend button.chosen {
+  color: var(--ink);
+  font-weight: 600;
 }
 .legend button.on {
   color: var(--ink);

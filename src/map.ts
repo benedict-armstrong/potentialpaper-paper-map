@@ -49,19 +49,34 @@ export interface TopicLabel {
 /** Words shorter than this pick out no topic label: "a" or "of" would light half of them. */
 const MIN_LABEL_TERM = 3;
 
+/** The groupings a search can name: `region:"…"` or `cluster:"…"` keeps only that grouping's papers. */
+export type SearchField = 'region' | 'cluster';
+
 /**
  * A search as the map reads it: its words and quoted phrases, lower case; those after a `-` are left out
- * (`exclude`). `field:value` words are kept whole, as words.
+ * (`exclude`). `region:` and `cluster:` name a grouping by its name (`groups`); other `field:value` words are kept
+ * whole, as words.
  */
-export function parseQuery(query: string): { include: string[]; exclude: string[] } {
+export function parseQuery(query: string): {
+  include: string[];
+  exclude: string[];
+  groups: { by: SearchField; name: string; not: boolean }[];
+} {
   const include: string[] = [];
   const exclude: string[] = [];
-  for (const m of query.toLowerCase().matchAll(/(-?)(?:"([^"]*)"?|(\S+))/g)) {
-    const term = (m[2] ?? m[3] ?? '').trim();
+  const groups: { by: SearchField; name: string; not: boolean }[] = [];
+  for (const m of query.toLowerCase().matchAll(/(-?)(?:(region|cluster):)?(?:"([^"]*)"?|(\S+))/g)) {
+    const term = (m[3] ?? m[4] ?? '').trim();
     if (!term || term === '-') continue;
-    (m[1] ? exclude : include).push(term);
+    if (m[2]) groups.push({ by: m[2] as SearchField, name: term, not: !!m[1] });
+    else (m[1] ? exclude : include).push(term);
   }
-  return { include, exclude };
+  return { include, exclude, groups };
+}
+
+/** The search for one grouping's papers, as a click on it in the legend writes it. */
+export function groupQuery(by: SearchField, name: string): string {
+  return `${by}:"${name.replaceAll('"', '')}"`;
 }
 
 /** The words in a search a topic label can match: the positive words and phrases, of `MIN_LABEL_TERM` or more. */
@@ -80,15 +95,25 @@ export function labelMatches(text: string, terms: readonly string[]): boolean {
 }
 
 /**
- * The papers a search finds by title: every positive word or phrase at the start of a word, and no excluded one.
- * Indexes, in map order; `null` for an empty search.
+ * The papers a search finds by title: every positive word or phrase at the start of a word, and no excluded one; in
+ * every grouping it names (`groupOf` gives a paper's), and none it leaves out. Indexes, in map order; `null` for an
+ * empty search.
  */
-export function searchTitles(titles: readonly string[], query: string): number[] | null {
-  const { include, exclude } = parseQuery(query);
-  if (include.length === 0 && exclude.length === 0) return null;
+export function searchTitles(
+  titles: readonly string[],
+  query: string,
+  groupOf?: (by: SearchField, i: number) => string | null,
+): number[] | null {
+  const { include, exclude, groups } = parseQuery(query);
+  if (include.length === 0 && exclude.length === 0 && groups.length === 0) return null;
   const out: number[] = [];
   titles.forEach((title, i) => {
-    if (include.every((t) => labelMatches(title, [t])) && !labelMatches(title, exclude)) out.push(i);
+    if (!include.every((t) => labelMatches(title, [t])) || labelMatches(title, exclude)) return;
+    for (const g of groups) {
+      const inGroup = groupOf?.(g.by, i)?.toLowerCase().replaceAll('"', '') === g.name;
+      if (inGroup === g.not) return;
+    }
+    out.push(i);
   });
   return out;
 }

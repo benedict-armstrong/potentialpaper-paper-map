@@ -3,6 +3,7 @@ import {
   categoryRgb,
   dotScale,
   frameAround,
+  groupQuery,
   labelMatches,
   labelNumber,
   labelTerms,
@@ -36,6 +37,17 @@ describe('search', () => {
     expect(parseQuery('Diffusion "language model" -video')).toEqual({
       include: ['diffusion', 'language model'],
       exclude: ['video'],
+      groups: [],
+    });
+  });
+  it('reads a grouping named by region: or cluster:', () => {
+    expect(parseQuery('region:"LLM agents · skills" -cluster:rl foo:bar')).toEqual({
+      include: ['foo:bar'],
+      exclude: [],
+      groups: [
+        { by: 'region', name: 'llm agents · skills', not: false },
+        { by: 'cluster', name: 'rl', not: true },
+      ],
     });
   });
   it('lights labels only for words of three letters or more', () => {
@@ -52,6 +64,11 @@ describe('search', () => {
     expect(searchTitles(titles, 'diffusion -video')).toEqual([1]);
     expect(searchTitles(titles, '"language models"')).toEqual([1, 2]);
     expect(searchTitles(titles, '  ')).toBeNull();
+    const region = (_: string, i: number) => ['video', 'language', 'language'][i];
+    expect(searchTitles(titles, 'region:language', region)).toEqual([1, 2]);
+    expect(searchTitles(titles, 'diffusion region:language', region)).toEqual([1]);
+    expect(searchTitles(titles, '-region:language', region)).toEqual([0]);
+    expect(searchTitles(titles, groupQuery('region', 'Video'), region)).toEqual([0]);
   });
 });
 

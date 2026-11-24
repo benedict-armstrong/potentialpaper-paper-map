@@ -1,6 +1,6 @@
 {
   "name": "potentialpaper-paper-map",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "private": true,
   "description": "A PotentialPaper plugin: every paper on a map, near the papers most like it, from a signal set.",
   "license": "MIT",
